@@ -10,12 +10,24 @@ import torch.optim as optim
 #image manipuliation (size)
 import cv2
 import os
+#image display
+import matplotlib.pyplot as plt
+import numpy as np
 
 data_root = "imagedata"
 root = data_root + "_preprocessed"
-classes = ("red", "blue")
+classes = ("blue","green","red", "yellow") #must be alphabetical
 IMG_WIDTH = 32
 IMG_HEIGHT = 32
+PATH = "./trained_net.pth"
+
+#copied function to show an image
+def imshow(img):
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.show()
+
 
 #TODO: fix image distortion when resizing (?)
 def resizeImages():
@@ -31,7 +43,6 @@ def resizeImages():
         for file in files:
             if file.endswith(".png"):
                 fullpath = os.path.join(r,file)
-                print(fullpath)
                 subdir = fullpath.split("\\")[1]
                 image = cv2.imread(fullpath, cv2.IMREAD_UNCHANGED)
                 newimage = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
@@ -73,7 +84,7 @@ def main():
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum = 0.9)
 
     #train the network
-    for epoch in range(10):  # loop over the dataset multiple times
+    for epoch in range(50):  # loop over the dataset multiple times
         print("Epoch: "+str(epoch+1))
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
@@ -99,15 +110,44 @@ def main():
     print('Finished Training.')
 
     #save the model
-    torch.save(net.sate_dict(), "./trained_net.pth")
+    torch.save(net.state_dict(), PATH)
 
     #test the model
     dataiter = iter(testloader)
     images, labels = dataiter.next()
     imshow(torchvision.utils.make_grid(images))
     print('GroundTruth: ', ' '.join('%5s' % classes[labels[j]] for j in range(4)))
-    #net.load_state_dict(torch.load(PATH))
+    net.load_state_dict(torch.load(PATH))
     outputs = net(images)
+    _, predicted = torch.max(outputs, 1)
+    print('Predicted: ', ' '.join('%5s' % classes[predicted[j]] for j in range(4)))
+
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            outputs = net(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    print('Accuracy of the network on the test images: %d %%' % (100 * correct / total))
+    class_correct = list(0. for i in range(10))
+    class_total = list(0. for i in range(10))
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            outputs = net(images)
+            _, predicted = torch.max(outputs, 1)
+            c = (predicted == labels).squeeze()
+            for i in range(4):
+                label = labels[i]
+                class_correct[label] += c[i].item()
+                class_total[label] += 1
+    for i in range(len(classes)):
+        print('Accuracy of %5s : %2d %%' % (
+            classes[i], 100 * class_correct[i] / class_total[i]))
 
     print("Program ran successfully.")
 if __name__ == "__main__":
